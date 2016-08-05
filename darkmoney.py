@@ -1,19 +1,22 @@
 import requests
+import sheet
+import pdfScraper
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver import ActionChains
 from selenium.common.exceptions import StaleElementReferenceException
 from urllib.request import urlopen
-from pdfminer.pdfinterp import PDFResourceManager, process_pdf
-from pdfminer.converter import TextConverter
-from pdfminer.layout import LAParams
-from io import StringIO
-from io import open
+#from pdfminer.pdfinterp import PDFResourceManager, process_pdf
+#from pdfminer.converter import TextConverter
+#from pdfminer.layout import LAParams
+#from io import StringIO
+#from io import open
 import time
+import sys
 import re
 
-
+"""
 def readPDF(pdffile):
     rsrcmgr = PDFResourceManager()
     retstr = StringIO()
@@ -26,13 +29,10 @@ def readPDF(pdffile):
     content = retstr.getvalue()
     retstr.close()
 
-    print(content)
     with open('samplePDF.txt', 'w') as f:
         f.write(content)
         f.close()
     pdffile.close()
-
-"""
 ***Not sure whether I can somehow use this to modify the headers when using
    PhantomJS, so we'll use chromedriver in the meantime.
 
@@ -55,53 +55,63 @@ def waitForLoad(driver):
         except StaleElementReferenceException:
             return
 
-driver = webdriver.Chrome('/home/qstin/chromedriver')
-driver.set_window_size(1440, 900)
-driver.get("http://apps.azsos.gov/apps/election/cfs/search/AdvancedSearch.aspx")
-time.sleep(5)
+def scrapeSOS():
+    filerId = sheet.getFilerId()
+    filerId = filerId.replace(" ", "")
+    if 'Nothing' in filerId:
+        sys.exit("Nothing to tweet")
 
-#This needs to take the filerID from the spreadsheet
-filerId ='201400888' 
+    driver = webdriver.Chrome('/home/qstin/chromedriver')
+    driver.set_window_size(1440, 900)
+    driver.get("http://apps.azsos.gov/apps/election/cfs/search/AdvancedSearch.aspx")
+    time.sleep(5)
 
-filerIdField = driver.find_element_by_id("ctl00_ctl00_PageContent_Sear"+
-        "chControlsContent_AdvancedSearchUserControl_FilerIdTextBox")
+    #This needs to take the filerID from the spreadsheet
+    
+    filerIdField = driver.find_element_by_id("ctl00_ctl00_PageContent_Sear"+
+            "chControlsContent_AdvancedSearchUserControl_FilerIdTextBox")
 
-actions = ActionChains(driver)
-actions.move_to_element(filerIdField)
-actions.click(filerIdField)
-filerIdField.clear()
-actions.send_keys(filerId + Keys.RETURN)
+    actions = ActionChains(driver)
+    actions.move_to_element(filerIdField)
+    actions.click(filerIdField)
+    filerIdField.clear()
+    actions.send_keys(filerId + Keys.RETURN)
+    actions.perform()
 
-actions.perform()
+    #waitForLoad(driver)
 
-#waitForLoad(driver)
+    time.sleep(5)
 
-time.sleep(3)
+    address = driver.find_element_by_xpath('//*[@id="ctl00_ctl00_PageConte'+
+            'nt_SearchControlsContent_AdvancedSearchDataUserControl_FilerD'+
+            'ataRadGrid_ctl00__0"]/td[1]')
 
-address = driver.find_element_by_xpath('//*[@id="ctl00_ctl00_PageConte'+
-        'nt_SearchControlsContent_AdvancedSearchDataUserControl_FilerD'+
-        'ataRadGrid_ctl00__0"]/td[1]')
-print(address.text)
-address.click()
+    print(address.text)
+    address.click()
 
-time.sleep(3)
+    time.sleep(3)
 
-driver.find_element(By.LINK_TEXT, 'More >>').click()
+    driver.find_element(By.LINK_TEXT, 'More >>').click()
 
-time.sleep(3)
-pdf_link = driver.find_element_by_xpath('//*[@id="ctl00_ctl00_PageCont'+
-'ent_SearchControlsContent_CommitteeDetailsPopupWindow_C_CommitteeDeta'+
-'ilsControl_CommitteeReportsWindow_C_CommitteeReportsControl_AllReport'+
-'s_ReportsPreviousTable"]/tbody/tr[3]/td[4]/a')
+    time.sleep(3)
+    pdf_link = driver.find_element_by_xpath('//*[@id="ctl00_ctl00_PageCont'+
+    'ent_SearchControlsContent_CommitteeDetailsPopupWindow_C_CommitteeDeta'+
+    'ilsControl_CommitteeReportsWindow_C_CommitteeReportsControl_AllReport'+
+    's_ReportsPreviousTable"]/tbody/tr[3]/td[4]/a')
 
-print(pdf_link.get_attribute('href'))
-pdf_link.click()
+    pdf_link.click()
 
-regex = re.compile('PublicReports.*pdf') 
-pdf_link = pdf_link.get_attribute('href')
-pdf_link = regex.findall(pdf_link)[0]
+    regex = re.compile('PublicReports.*pdf') 
+    pdf_link = pdf_link.get_attribute('href')
+    pdf_link = regex.findall(pdf_link)[0]
+    print(pdf_link)
 
-#Switch to the new tab
-readPDF(urlopen('http://apps.azsos.gov/apps/election/cfs/search/'+pdf_link))
-driver.close()
-
+    #Switch to the new tab
+    #readPDF(urlopen('http://apps.azsos.gov/apps/election/cfs/search/'+pdf_link))
+    pdf = urlopen('http://apps.azsos.gov/apps/election/cfs/search/'+pdf_link)
+    with open("scrapedPDF.pdf", 'wb') as f:
+        f.write(pdf.read())
+        f.close()
+    pdfScraper.scrape('scrapedPDF.pdf')
+    driver.quit()
+scrapeSOS()

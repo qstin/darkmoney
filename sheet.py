@@ -15,8 +15,10 @@ def getFilerId():
         filer_cell = 'C' + str(len(list_of_rows)-1)
         sh = gc.open('Dark Money email sheet')
         sh2 = sh.worksheet('Sheet2')
-        val = sh2.acell(filer_cell)
-        wks.update_acell('G' + str(row_count-1), 'tweeted')
+        val = sh2.acell(filer_cell).value
+        #The line below needs to be called after the tweet
+        #It'd be best to incorporate the 
+        #wks.update_acell('G' + str(row_count-1), 'tweeted')
     else:
         val = 'Nothing new to tweet'
     return val
