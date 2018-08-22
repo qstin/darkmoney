@@ -1,70 +1,32 @@
-import requests
 import sheet
 import pdfScraper
+from pyvirtualdisplay import Display
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver import ActionChains
 from selenium.common.exceptions import StaleElementReferenceException
-from urllib.request import urlopen
-#from pdfminer.pdfinterp import PDFResourceManager, process_pdf
-#from pdfminer.converter import TextConverter
-#from pdfminer.layout import LAParams
-#from io import StringIO
-#from io import open
+from selenium.webdriver.chrome.options import Options
+from urllib.request import Request, urlopen
 import time
 import sys
 import re
 
-"""
-def readPDF(pdffile):
-    rsrcmgr = PDFResourceManager()
-    retstr = StringIO()
-    laparams = LAParams()
-    device = TextConverter(rsrcmgr, retstr, laparams=laparams)
-
-    process_pdf(rsrcmgr, device, pdffile)
-    device.close()
-
-    content = retstr.getvalue()
-    retstr.close()
-
-    with open('samplePDF.txt', 'w') as f:
-        f.write(content)
-        f.close()
-    pdffile.close()
-***Not sure whether I can somehow use this to modify the headers when using
-   PhantomJS, so we'll use chromedriver in the meantime.
-
-session = requests.Session()
-headers = {"User-Agent":"Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:47.0) 
-            Gecko/20100101 Firefox/47.0", 
-            "Accept":"text/html,applicaiton/xhtml+xml; q=0.9,image/webp,*/*;q=0.8"}
-"""
-def waitForLoad(driver):
-    elem = driver.find_element_by_tag_name("body")
-    count = 0
-    while True:
-        count += 1
-        if count > 20:
-            print("Timing out after 10 seconds and returning")
-            return
-        time.sleep(.5)
-        try:
-            elem == driver.find_element_by_tag_name("body")
-        except StaleElementReferenceException:
-            return
-
 def scrapeSOS():
+
     filerId = sheet.getFilerId()
     filerId = filerId.replace(" ", "")
     if 'Nothing' in filerId:
         sys.exit("Nothing to tweet")
 
-    driver = webdriver.Chrome('/home/qstin/chromedriver')
-    driver.set_window_size(1440, 900)
+    print(filerId)
+    display = Display(visible=0, size=(1341,810))
+    display.start()
+    opts = Options()
+    opts.add_argument("user-agent=Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/41.0.2228.0 Safari/537.36")
+    driver = webdriver.Chrome('/root/darkmoney/chromedriver', chrome_options=opts)
     driver.get("http://apps.azsos.gov/apps/election/cfs/search/AdvancedSearch.aspx")
-    time.sleep(5)
+    time.sleep(6)
 
     #This needs to take the filerID from the spreadsheet
     
@@ -78,22 +40,20 @@ def scrapeSOS():
     actions.send_keys(filerId + Keys.RETURN)
     actions.perform()
 
-    #waitForLoad(driver)
-
-    time.sleep(5)
+    time.sleep(6)
 
     address = driver.find_element_by_xpath('//*[@id="ctl00_ctl00_PageConte'+
             'nt_SearchControlsContent_AdvancedSearchDataUserControl_FilerD'+
             'ataRadGrid_ctl00__0"]/td[1]')
 
-    print(address.text)
+    filing_committee = address.text
     address.click()
 
-    time.sleep(3)
+    time.sleep(6)
 
     driver.find_element(By.LINK_TEXT, 'More >>').click()
 
-    time.sleep(3)
+    time.sleep(6)
     pdf_link = driver.find_element_by_xpath('//*[@id="ctl00_ctl00_PageCont'+
     'ent_SearchControlsContent_CommitteeDetailsPopupWindow_C_CommitteeDeta'+
     'ilsControl_CommitteeReportsWindow_C_CommitteeReportsControl_AllReport'+
@@ -104,14 +64,18 @@ def scrapeSOS():
     regex = re.compile('PublicReports.*pdf') 
     pdf_link = pdf_link.get_attribute('href')
     pdf_link = regex.findall(pdf_link)[0]
-    print(pdf_link)
+
+    # Send the filing url to sheet.py 
+    pdf_url = 'http://apps.azsos.gov/apps/election/cfs/search/'+pdf_link
 
     #Switch to the new tab
     #readPDF(urlopen('http://apps.azsos.gov/apps/election/cfs/search/'+pdf_link))
-    pdf = urlopen('http://apps.azsos.gov/apps/election/cfs/search/'+pdf_link)
+    req = Request(pdf_url, headers={'User-Agent': 'Mozilla/5.0'})
+    pdf = urlopen(req)
     with open("scrapedPDF.pdf", 'wb') as f:
         f.write(pdf.read())
         f.close()
-    pdfScraper.scrape('scrapedPDF.pdf')
+    darkmoney_rows = pdfScraper.scrape('scrapedPDF.pdf')
+    sheet.fillSheet(darkmoney_rows, pdf_url, filing_committee, filerId)
     driver.quit()
 scrapeSOS()

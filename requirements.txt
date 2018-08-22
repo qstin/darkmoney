@@ -1,0 +1,5 @@
+gspread==0.4.1
+pdfquery==0.4.3
+selenium==2.53.6
+tweepy==3.5.0
+google_api_python_client==1.5.2
